@@ -4,13 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="manifest" href="./manifest.json">
-
-    <meta name="theme-color" content="#00ff88">
+    <meta name="theme-color" content="#000000">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="DonyBurguer's">
+    <meta name="apple-mobile-web-app-title" content="DONY BURGUERS SUPREME">
     <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192x192.png">
     <link rel="apple-touch-icon" href="./icons/icon-192x192.png">
+
     <title>DONY BURGUERS SUPREME - JDP INDUSTRIAL</title>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
@@ -102,6 +102,30 @@
     </div>
 
     <script>
+
+           // REGISTRO DO SERVICE WORKER COM CONTROLE DE ATUALIZAÇÃO
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./service-worker.js').then(reg => {
+            console.log('Kernel PWA: Ativo', reg.scope);
+            
+            // Verifica se há uma atualização do sistema
+            reg.onupdatefound = () => {
+                const installingWorker = reg.installing;
+                installingWorker.onstatechange = () => {
+                    if (installingWorker.state === 'installed') {
+                        if (navigator.serviceWorker.controller) {
+                            console.log('Nova versão detectada. Reiniciando Kernel...');
+                            // Força a atualização para o Engenheiro não ver dados velhos
+                            window.location.reload();
+                        }
+                    }
+                };
+            };
+        }).catch(err => console.error('Falha no Kernel:', err));
+    });
+}
+
         // CHAVE PIX COPIA E COLA OFICIAL
         const pixCopiaECola = "00020126580014br.gov.bcb.pix013643a6f5e6-2934-495f-a96c-f7eaf67d28da5204000053039865802BR5925JOSE DIVINO PRADO DA LAPA6009SAO PAULO62580520SAN2026021402552811750300017br.gov.bcb.brcode01051.0.0630402E8";
         
