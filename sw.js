@@ -1,50 +1,72 @@
-/**
- * SISTEMA DE ENGENHARIA JDP - SERVICE WORKER PROFISSIONAL
- * Desenvolvido para: José Divino Prado da Lapa
- * Tecnologia: Workbox 7.0.0 (Google)
- */
+const assets = [
+  './',
+  './index.html',
+  'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css'
+];
 
-// 1. Importação da Biblioteca Central do Workbox
+self.addEventListener('install', e => {
+  e.waitUntil(caches.open(cacheName).then(cache => cache.addAll(assets)));
+});
+
+self.addEventListener('fetch', e => {
+  e.respondWith(caches.match(e.request).then(res => res || fetch(e.request)));
+});
+       // Importa a biblioteca Workbox do CDN
 importScripts('https://storage.googleapis.com/workbox-cdn/releases/7.0.0/workbox-sw.js');
 
+// Verifica se o Workbox foi carregado com sucesso
 if (workbox) {
-  console.log("🎉 Sucesso! O porteiro (Service Worker) do Engenheiro José Divino está ativo.");
+  console.log(`🎉 Sucesso! Workbox carregado para Service Worker.`);
 
-  // --- 2. PRECACHING (Blindagem de Arquivos Críticos) ---
-  // Estes arquivos são baixados imediatamente na instalação para garantir o modo Offline.
-  workbox.precaching.precacheAndRoute([
-    { url: './index.html', revision: '1.0.5' },
-    { url: './', revision: '1.0.5' },
-    { url: 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css', revision: '1.0.0' },
-    { url: 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js', revision: '1.0.0' }
-  ]);
-
-  // --- 3. ESTRATÉGIAS DE ROTEAMENTO (Inteligência de Tráfego) ---
-
-  // 3.1 Assets Estáticos (CSS, JS, Imagens, Fontes) - ESTRATÉGIA: CACHE FIRST
-  // Se já estiver no celular, abre instantaneamente.
+  // --- 1. Roteamento e Estratégias de Caching ---
+  
+  // 1.1 Cache de Assets Estáticos (CSS, JS, Imagens, Fontes)
+  // Estratégia: Cache First (Cachear primeiro)
+  // Serve instantaneamente o arquivo do cache, pois esses arquivos raramente mudam.
   workbox.routing.registerRoute(
+    // Expressão regular para capturar URLs que terminam em extensões comuns
     /\.(?:js|css|png|gif|jpg|jpeg|svg|woff|woff2|ttf|eot)$/,
     new workbox.strategies.CacheFirst({
-      cacheName: 'jdp-assets-estaticos',
+      cacheName: 'static-assets-cache',
       plugins: [
+        // Mantém apenas 60 entradas no cache e as exclui após 30 dias
         new workbox.expiration.ExpirationPlugin({
-          maxEntries: 60,                // Limita a 60 arquivos no cofre
-          maxAgeSeconds: 30 * 24 * 60 * 60, // Expira após 30 dias (Engenharia de Memória)
-        }),
-        new workbox.cacheableResponse.CacheableResponsePlugin({
-          statuses: [0, 200],            // Aceita arquivos de CDN externa (como FontAwesome)
+          maxEntries: 60,
+          maxAgeSeconds: 30 * 24 * 60 * 60, 
         }),
       ],
     })
   );
 
-  // 3.2 Páginas de Navegação (HTML principal) - ESTRATÉGIA: NETWORK FIRST
-  // Tenta buscar a versão mais nova na rede. Se falhar (offline), entrega a do cache.
+  // 1.2 Cache para Chamadas de API (Dados JSON)
+  // Estratégia: Stale While Revalidate (Obsoleto Enquanto Revalida)
+  // Serve os dados do cache imediatamente (para velocidade) e, em segundo plano, busca a versão mais recente na rede.
   workbox.routing.registerRoute(
-    ({ request }) => request.mode === 'navigate',
+    // Rota para qualquer URL que contenha 'api/' (assumindo que suas APIs sigam esse padrão)
+    /.*\/api\/.*/,
+    new workbox.strategies.StaleWhileRevalidate({
+      cacheName: 'api-data-cache',
+      plugins: [
+        // Garante que o cache só armazene respostas com Status 200 (Sucesso)
+        new workbox.cacheableResponse.CacheableResponsePlugin({
+          statuses: [200],
+        }),
+        new workbox.expiration.ExpirationPlugin({
+          maxEntries: 50,
+          maxAgeSeconds: 24 * 60 * 60, // 24 horas
+        }),
+      ],
+    })
+  );
+
+  // 1.3 Cache para Páginas HTML
+  // Estratégia: Network First (Rede Primeiro)
+  // Tenta a rede para garantir o HTML mais atualizado, mas usa o cache como fallback em caso de falha (offline).
+  workbox.routing.registerRoute(
+    // Rota para a raiz (página principal)
+    new RegExp('^' + self.location.origin + '/$'),
     new workbox.strategies.NetworkFirst({
-      cacheName: 'jdp-paginas-html',
+      cacheName: 'html-cache',
       plugins: [
         new workbox.cacheableResponse.CacheableResponsePlugin({
           statuses: [200],
@@ -53,21 +75,13 @@ if (workbox) {
     })
   );
 
-  // 3.3 Dados de API e JSON - ESTRATÉGIA: STALE WHILE REVALIDATE
-  // Entrega o dado antigo rápido e atualiza o banco de dados em segundo plano.
-  workbox.routing.registerRoute(
-    /.*\/api\/.*/,
-    new workbox.strategies.StaleWhileRevalidate({
-      cacheName: 'jdp-dados-dinamicos',
-    })
-  );
-
-  // --- 4. CONTROLE DE CICLO DE VIDA ---
-  // Garante que o sistema se atualize assim que você subir uma versão nova.
-  workbox.core.skipWaiting();
+  // --- 2. Limpeza de Cache Antigo ---
+  
+  // Isso garante que versões antigas do Service Worker não deixem lixo de cache.
   workbox.core.clientsClaim();
+  workbox.core.skipWaiting();
   workbox.precaching.cleanupOutdatedCaches();
-
+  
 } else {
-  console.error("😢 Erro Crítico: Workbox não pôde ser carregado. Verifique a conexão.");
-}
+  console.log(`😢 ERRO: Workbox não foi carregado. A funcionalidade offline estará desabilitada.`);
+    }
