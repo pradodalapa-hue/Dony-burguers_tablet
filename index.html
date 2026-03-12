@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DONY BURGUERS SUPREME - JDP INDUSTRIAL</title>
+    <title>DONY BURGUERS SUPREME - REVISADO JDP</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
@@ -12,23 +12,20 @@
             --gold-18k: linear-gradient(145deg, #bf953f 0%, #fcf6ba 20%, #b38728 40%, #fcf6ba 60%, #aa771c 80%, #fcf6ba 100%);
             --gold-solid: #d4af37;
         }
-        body { background: #000; color: var(--gold-solid); font-family: 'Arial Black', sans-serif; margin: 0; padding: 110px 3% 130px 3%; overflow: hidden; }
+        body { background: #000; color: var(--gold-solid); font-family: 'Arial Black', sans-serif; margin: 0; padding: 110px 3% 130px 3%; overflow-x: hidden; }
         
-        /* HEADER */
         .header { position: fixed; top: 0; left: 0; right: 0; height: 95px; background: #000; border-bottom: 3px solid var(--gold-solid); z-index: 1000; display: flex; justify-content: space-between; align-items: center; padding: 0 5%; }
         #total-venda { font-size: 28px; font-weight: 900; background: var(--gold-18k); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
 
-        /* GRID */
         .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
         .card { background: #050505; border: 1px solid #1a1a1a; border-radius: 12px; overflow: hidden; position: relative; height: 180px; }
         .card.selecionado { border: 3px solid var(--gold-solid); box-shadow: 0 0 15px var(--gold-solid); }
         .card img { width: 100%; height: 100%; object-fit: cover; opacity: 0.6; }
 
-        /* BOTÕES */
         .btn-modo-pix { background: var(--gold-18k); color: #000; border: none; padding: 10px 15px; border-radius: 8px; font-weight: bold; }
         .btn-confirmar-pix { position: fixed; bottom: 20px; left: 5%; width: 90%; background: #00ff00; color: #000; padding: 22px; border: none; border-radius: 15px; font-weight: 900; font-size: 1.6rem; z-index: 1100; display: none; }
 
-        /* ILUSÃO SUPREME (ANIMAÇÃO) */
+        /* ILUSÃO SUPREME */
         #supreme-overlay { display: none; position: fixed; inset: 0; background: #000; z-index: 20000; flex-direction: column; align-items: center; justify-content: center; }
         .gold-text { font-size: 12vw; font-weight: 900; background: var(--gold-18k); -webkit-background-clip: text; -webkit-text-fill-color: transparent; text-align: center; }
         .slide-anim { animation: slidePass 1s ease-in-out 2; }
@@ -52,7 +49,7 @@
 
     <div class="grid" id="cardapio-vitrine"></div>
 
-    <button id="btn-gerar-qr" class="btn-confirmar-pix" onclick="executarIlusao(true)">GERAR QR CODE AGORA</button>
+    <button id="btn-gerar-qr" class="btn-confirmar-pix" onclick="processarPedidoCompleto()">GERAR QR CODE AGORA</button>
 
     <div id="supreme-overlay">
         <div id="ilusao-texto" class="gold-text">DONY BURGUERS</div>
@@ -74,7 +71,6 @@
         firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
 
-        // RECONHECIMENTO DE VOZ PARA "JÁ FOI PAGO"
         function iniciarVoz() {
             const Speech = window.SpeechRecognition || window.webkitSpeechRecognition;
             if(Speech) {
@@ -82,9 +78,7 @@
                 rec.continuous = true; rec.lang = 'pt-BR';
                 rec.onresult = (e) => {
                     const texto = e.results[e.results.length-1][0].transcript.toLowerCase();
-                    if(texto.includes("já foi pago") || texto.includes("foi pago")) {
-                        executarIlusao(false); // Chama a ilusão de agradecimento
-                    }
+                    if(texto.includes("já foi pago")) executarIlusaoFinal();
                 };
                 rec.start();
             }
@@ -107,46 +101,62 @@
 
         function selecionarItem(id, preco) {
             if(!modoPagar) return;
-            contaAtual.push({id, preco: parseFloat(preco)});
+            const p = produtosGlobal.find(x => x.id === id);
+            contaAtual.push(p);
             document.getElementById(`card-${id}`).classList.add('selecionado');
-            const total = contaAtual.reduce((acc, i) => acc + i.preco, 0);
+            const total = contaAtual.reduce((acc, i) => acc + parseFloat(i.preco), 0);
             document.getElementById('total-venda').innerText = `R$ ${total.toFixed(2).replace('.',',')}`;
         }
 
-        // LÓGICA ILUSÃO: FUNÇÃO DUPLA
-        async function executarIlusao(ePedido) {
+        async function processarPedidoCompleto() {
+            const total = contaAtual.reduce((acc, i) => acc + parseFloat(i.preco), 0);
+            if(total <= 0) return;
+
+            // 1. REGISTRA NO FIREBASE (O QUE ESTAVA FALTANDO)
+            db.ref('PEDIDOS_PRODUCAO').push({
+                itens: contaAtual,
+                total: total.toFixed(2),
+                data: new Date().toLocaleString(),
+                status: "PAGO_AGUARDANDO"
+            });
+
+            // 2. BAIXA ESTOQUE
+            for(let item of contaAtual) {
+                db.ref('cardapio_supreme/' + item.id).update({ 
+                    estoque: (item.estoque || 1) - 1 
+                });
+            }
+
+            // 3. EXECUTA ANIMAÇÃO E MOSTRA QR
+            await executarIlusaoPedido();
+        }
+
+        async function executarIlusaoPedido() {
             const overlay = document.getElementById('supreme-overlay');
             const texto = document.getElementById('ilusao-texto');
             const flash = document.getElementById('flash-img');
 
             overlay.style.display = 'flex';
+            texto.innerText = "DONY BURGUERS";
+            texto.style.display = 'block';
+            texto.classList.add('slide-anim');
             
-            if(ePedido) {
-                // ANIMAÇÃO DE CONFIRMAÇÃO DO PEDIDO
-                texto.innerText = "DONY BURGUERS";
-                texto.classList.add('slide-anim');
-                await new Promise(r => setTimeout(r, 2000));
-                texto.style.display = 'none';
-                flash.style.display = 'block';
-                for (let item of contaAtual) {
-                    flash.src = produtosGlobal.find(x => x.id === item.id).link;
-                    await new Promise(r => setTimeout(r, 250));
-                }
-                abrirQR();
-            } else {
-                // ANIMAÇÃO DE FINALIZAÇÃO (OBRIGADO!)
-                document.getElementById('modal-pix-final').style.display = 'none';
-                texto.innerText = "OBRIGADO!";
-                texto.style.display = 'block';
-                texto.style.animation = "pulse 1s infinite alternate";
-                await new Promise(r => setTimeout(r, 4000));
-                location.reload(); // Reseta o sistema para a próxima venda
+            await new Promise(r => setTimeout(r, 2000));
+            
+            texto.style.display = 'none';
+            flash.style.display = 'block';
+            for (let item of contaAtual) {
+                flash.src = item.link;
+                await new Promise(r => setTimeout(r, 250));
             }
+
             overlay.style.display = 'none';
+            flash.style.display = 'none';
+            abrirQR();
         }
 
         function abrirQR() {
-            const total = contaAtual.reduce((acc, i) => acc + i.preco, 0);
+            const total = contaAtual.reduce((acc, i) => acc + parseFloat(i.preco), 0);
             const valorTxt = total.toFixed(2);
             const tamValor = valorTxt.length.toString().padStart(2, '0');
             const pixDinamico = PIX_BASE + "530398654" + tamValor + valorTxt + "5802BR5925Jose Divino Prado Da Lapa6009Sao Paulo62070503***63041F98";
@@ -156,6 +166,21 @@
             qrBox.innerHTML = "";
             new QRCode(qrBox, { text: pixDinamico, width: 260, height: 260 });
             document.getElementById('modal-pix-final').style.display = 'flex';
+        }
+
+        async function executarIlusaoFinal() {
+            document.getElementById('modal-pix-final').style.display = 'none';
+            const overlay = document.getElementById('supreme-overlay');
+            const texto = document.getElementById('ilusao-texto');
+            
+            overlay.style.display = 'flex';
+            texto.innerText = "OBRIGADO!";
+            texto.style.display = 'block';
+            texto.classList.remove('slide-anim');
+            texto.style.animation = "pulse 1s infinite alternate";
+            
+            await new Promise(r => setTimeout(r, 4000));
+            location.reload(); 
         }
     </script>
 </body>
