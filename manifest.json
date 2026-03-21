@@ -1,0 +1,15 @@
+{
+  "name": "JDP INDUSTRIAL - DONY-BURGUERS_TABLE",
+  "short_name": "DONY-BURGUERS_TABLE",
+  "start_url": "index.html",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "icons": [
+    {
+      "src": "https://raw.githubusercontent.com/pradodalapa-hue/fotos-industrial/main/img/JDP_1774061215892_1774053336836.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
